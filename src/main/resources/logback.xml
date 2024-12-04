@@ -1,0 +1,26 @@
+<configuration>
+    <!-- Spring Property 설정 -->
+    <springProperty name="logFileName" source="logging.file.name" />
+    <springProperty name="logLevel" source="logging.level.root" />
+
+    <!-- 콘솔 로그 출력 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 파일 로그 출력 -->
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>${logFileName}</file>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 루트 로거 설정 -->
+    <root level="${logLevel}">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="FILE" />
+    </root>
+</configuration>
