@@ -1,10 +1,13 @@
 package org.kkb.job;
 
 import org.kkb.config.FileProperties;
+import org.kkb.listener.CsvItemReadListener;
+import org.kkb.listener.CsvItemWriteListener;
 import org.kkb.model.KoreanFoodStore;
 import org.kkb.tasklet.FileMoveTasklet;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
+import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.configuration.annotation.JobScope;
 import org.springframework.batch.core.configuration.annotation.StepScope;
@@ -14,6 +17,7 @@ import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.core.step.skip.AlwaysSkipItemSkipPolicy;
 import org.springframework.batch.core.step.tasklet.Tasklet;
+import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
@@ -41,6 +45,24 @@ public class CsvReadJobConfig {
 
     @Value("${csv.read.job.chunk:1000}")
     private int chunkSize;
+
+
+    @Bean
+    @JobScope
+    public Tasklet fileMoveToDoneTasklet(@Value("#{jobParameters['targetFile']}") String targetFile, @Value("#{stepExecution}") StepExecution stepExecution){
+        ExecutionContext jobExecutionContext=stepExecution.getJobExecution().getExecutionContext();
+        String step2Status = jobExecutionContext.getString("CsvToDatabaseStepStatus", "FAILED");
+        return new FileMoveTasklet(fileProperties.getProcess()+targetFile, "SUCCESS".equals(step2Status)?fileProperties.getCompleted():fileProperties.getError());
+    }
+
+
+    @Bean
+    public Step moveToDoneStep(JobRepository jobRepository, @Qualifier("fileMoveToDoneTasklet")Tasklet fileMoveToDoneTasklet, PlatformTransactionManager transactionManager) {
+        return new StepBuilder("moveToDoneStep", jobRepository)
+                .tasklet(fileMoveToDoneTasklet, transactionManager)
+                .build();
+    }
+
 
     @Bean
     @StepScope
@@ -78,15 +100,17 @@ public class CsvReadJobConfig {
     
     @Bean
     @JobScope
-    public Step csvFileToDatabaseStep(JobRepository jobRepository, PlatformTransactionManager transactionManager, FlatFileItemReader<KoreanFoodStore> csvReader,
-                                      JdbcBatchItemWriter<KoreanFoodStore> jdbcWriter,
-                                      @Value("#{jobParameters['targetFile']}") String targetFile) {
+    public Step csvToDatabaseStep(JobRepository jobRepository, PlatformTransactionManager transactionManager, FlatFileItemReader<KoreanFoodStore> csvReader,
+                                  JdbcBatchItemWriter<KoreanFoodStore> jdbcWriter,
+                                  @Value("#{jobParameters['targetFile']}") String targetFile) {
         int lastDotIndex = targetFile.lastIndexOf('.');
         String fileName = lastDotIndex == -1 ? targetFile : targetFile.substring(0, lastDotIndex)+"_"+System.currentTimeMillis();
         return new StepBuilder(fileName, jobRepository)
                 .<KoreanFoodStore, KoreanFoodStore>chunk(chunkSize, transactionManager)
                 .reader(csvReader)
                 .writer(jdbcWriter)
+                .listener(new CsvItemReadListener<KoreanFoodStore>(targetFile))
+                .listener(new CsvItemWriteListener<KoreanFoodStore>(targetFile))
                 .faultTolerant()
                 .skipPolicy(new AlwaysSkipItemSkipPolicy())
                 .build();
@@ -94,24 +118,25 @@ public class CsvReadJobConfig {
 
     @Bean
     @JobScope
-    public Tasklet fileMoveToProccessTasklet(@Value("#{jobParameters['targetFile']}") String targetFile){
+    public Tasklet fileMoveToProcessTasklet(@Value("#{jobParameters['targetFile']}") String targetFile){
         return new FileMoveTasklet(fileProperties.getReady()+targetFile, fileProperties.getProcess());
     }
 
 
     @Bean
-    public Step moveToProcessStep(JobRepository jobRepository, Tasklet fileMoveToProccessTasklet, PlatformTransactionManager transactionManager) {
+    public Step moveToProcessStep(JobRepository jobRepository, @Qualifier("fileMoveToProcessTasklet")Tasklet fileMoveToProccessTasklet, PlatformTransactionManager transactionManager) {
         return new StepBuilder("moveToProcessStep", jobRepository)
                 .tasklet(fileMoveToProccessTasklet, transactionManager)
                 .build();
     }
 
     @Bean
-    public Job csvToDatabaseJob(JobRepository jobRepository, @Qualifier("moveToProcessStep")Step moveToProcessStep, @Qualifier("csvFileToDatabaseStep")Step csvFileToDatabaseStep) {
+    public Job csvToDatabaseJob(JobRepository jobRepository, @Qualifier("moveToProcessStep")Step moveToProcessStep, @Qualifier("csvToDatabaseStep")Step csvFileToDatabaseStep, @Qualifier("moveToDoneStep")Step moveToDoneStep) {
         return new JobBuilder("csvToDatabaseJob", jobRepository)
                 .incrementer(new RunIdIncrementer())
                 .start(moveToProcessStep)
                 .next(csvFileToDatabaseStep)
+                .next(moveToDoneStep)
                 .build();
     }
 
