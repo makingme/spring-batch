@@ -5,6 +5,7 @@ import org.kkb.util.AESEncryptionUtil;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.explore.JobExplorer;
 import org.springframework.batch.core.explore.support.JobExplorerFactoryBean;
+import org.springframework.batch.core.launch.support.TaskExecutorJobLauncher;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.repository.support.JobRepositoryFactoryBean;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,10 +14,12 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.init.DataSourceInitializer;
 import org.springframework.jdbc.datasource.init.DatabasePopulator;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
@@ -79,11 +82,32 @@ public class AppConfig {
         return factory.getObject();
     }
 
+    @Bean
+    public TaskExecutor taskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(20);         // 최소 스레드 개수
+        executor.setMaxPoolSize(20);        // 최대 스레드 개수
+        executor.setQueueCapacity(10000);      // 대기 중인 작업 큐 크기
+        executor.setThreadNamePrefix("batch-thread-");
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean
+    public TaskExecutorJobLauncher jobLauncher(JobRepository jobRepository, TaskExecutor taskExecutor) throws Exception {
+        TaskExecutorJobLauncher jobLauncher = new TaskExecutorJobLauncher();
+        jobLauncher.setJobRepository(jobRepository);
+        jobLauncher.setTaskExecutor(taskExecutor);
+        jobLauncher.afterPropertiesSet();
+        return jobLauncher;
+    }
+
     // BATCH TABLE 초기화
     @Bean
     public DataSourceInitializer dataSourceInitializer(DataSource dataSource) {
         DataSourceInitializer initializer = new DataSourceInitializer();
         initializer.setDataSource(dataSource);
+        initializer.setEnabled(true);
         initializer.setDatabasePopulator(databasePopulator());
         return initializer;
     }
