@@ -23,6 +23,9 @@ public class FileProperties {
     @Value("${file.path.error}")
     private String error;
 
+    @Value("${file.path.backup}")
+    private String backup;
+
     @Value("${file.line.limit}")
     private int lineLimit;
 
@@ -68,6 +71,9 @@ public class FileProperties {
         return receivePath;
     }
     public void setReceivePath(String receivePath) { this.receivePath = receivePath; }
+
+    public String getBackup() { return backup; }
+    public void setBackup(String backup) { this.backup = backup; }
 
     public String getSingleTarget() { return singleTarget; }
     public void setSingleTarget(String singleTarget) { this.singleTarget = singleTarget; }

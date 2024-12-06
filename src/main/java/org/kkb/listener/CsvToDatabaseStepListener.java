@@ -26,7 +26,7 @@ public class CsvToDatabaseStepListener implements StepExecutionListener {
     public ExitStatus afterStep(StepExecution stepExecution) {
         log.info("{} File Read & Write End", targetFileName);
         ExecutionContext jobExecutionContext = stepExecution.getJobExecution().getExecutionContext();
-        if (stepExecution.getFailureExceptions().isEmpty()) {
+        if (stepExecution.getFailureExceptions().isEmpty()&& stepExecution.getExitStatus().equals(ExitStatus.COMPLETED)) {
             jobExecutionContext.putString("CsvToDatabaseStepStatus", "SUCCESS");
         } else {
             jobExecutionContext.putString("CsvToDatabaseStepStatus", "FAILED");

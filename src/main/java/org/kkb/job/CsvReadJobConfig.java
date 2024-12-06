@@ -3,11 +3,12 @@ package org.kkb.job;
 import org.kkb.config.FileProperties;
 import org.kkb.listener.CsvItemReadListener;
 import org.kkb.listener.CsvItemWriteListener;
+import org.kkb.listener.CsvToDatabaseStepListener;
 import org.kkb.model.KoreanFoodStore;
-import org.kkb.tasklet.FileMoveTasklet;
+import org.kkb.tasklet.MoveFileAfterProcessTasklet;
+import org.kkb.tasklet.MoveFileToProcessTasklet;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
-import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.configuration.annotation.JobScope;
 import org.springframework.batch.core.configuration.annotation.StepScope;
@@ -17,7 +18,6 @@ import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.core.step.skip.AlwaysSkipItemSkipPolicy;
 import org.springframework.batch.core.step.tasklet.Tasklet;
-import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
@@ -30,6 +30,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
@@ -46,13 +47,10 @@ public class CsvReadJobConfig {
     @Value("${csv.read.job.chunk:1000}")
     private int chunkSize;
 
-
     @Bean
     @JobScope
-    public Tasklet fileMoveToDoneTasklet(@Value("#{jobParameters['targetFile']}") String targetFile, @Value("#{stepExecution}") StepExecution stepExecution){
-        ExecutionContext jobExecutionContext=stepExecution.getJobExecution().getExecutionContext();
-        String step2Status = jobExecutionContext.getString("CsvToDatabaseStepStatus", "FAILED");
-        return new FileMoveTasklet(fileProperties.getProcess()+targetFile, "SUCCESS".equals(step2Status)?fileProperties.getCompleted():fileProperties.getError());
+    public Tasklet fileMoveToDoneTasklet(@Value("#{jobParameters['targetFile']}") String targetFile){
+        return new MoveFileAfterProcessTasklet(fileProperties.getProcess()+targetFile, fileProperties.getCompleted(),fileProperties.getError());
     }
 
 
@@ -111,15 +109,17 @@ public class CsvReadJobConfig {
                 .writer(jdbcWriter)
                 .listener(new CsvItemReadListener<KoreanFoodStore>(targetFile))
                 .listener(new CsvItemWriteListener<KoreanFoodStore>(targetFile))
+                .listener(new CsvToDatabaseStepListener(targetFile))
                 .faultTolerant()
-                .skipPolicy(new AlwaysSkipItemSkipPolicy())
+                .retryLimit(3)
+                .retry(CannotAcquireLockException.class)
                 .build();
     }
 
     @Bean
     @JobScope
     public Tasklet fileMoveToProcessTasklet(@Value("#{jobParameters['targetFile']}") String targetFile){
-        return new FileMoveTasklet(fileProperties.getReady()+targetFile, fileProperties.getProcess());
+        return new MoveFileToProcessTasklet(fileProperties.getReady()+targetFile, fileProperties.getProcess());
     }
 
 

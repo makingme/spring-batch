@@ -10,9 +10,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
-public class FileMoveTasklet implements Tasklet {
+public class MoveFileToProcessTasklet implements Tasklet {
 
-    public FileMoveTasklet(String sourceFilePath, String destinationDirPath) {
+    public MoveFileToProcessTasklet(String sourceFilePath, String destinationDirPath) {
         this.sourceFilePath = sourceFilePath;
         this.destinationDirPath = destinationDirPath;
     }

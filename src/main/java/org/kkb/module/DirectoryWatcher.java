@@ -1,4 +1,4 @@
-package org.kkb.service;
+package org.kkb.module;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 public class DirectoryWatcher {
@@ -24,8 +25,11 @@ public class DirectoryWatcher {
             System.out.println("Watching directory: " + directoryPath);
 
             while (isRun) {
-                WatchKey key = watchService.take();
-
+                WatchKey key = watchService.poll(10, TimeUnit.SECONDS);
+                if(key == null){
+                    log.info("{} 감지된 파일 없음", directoryPath);
+                    continue;
+                }
                 for (WatchEvent<?> event : key.pollEvents()) {
                     if (event.kind() == StandardWatchEventKinds.ENTRY_CREATE) {
                         Path filePath = directoryPath.resolve((Path) event.context());

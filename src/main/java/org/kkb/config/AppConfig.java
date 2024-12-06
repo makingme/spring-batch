@@ -14,6 +14,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.init.DataSourceInitializer;
@@ -62,7 +63,10 @@ public class AppConfig {
 
     @Bean
     public PlatformTransactionManager transactionManager(DataSource dataSource) {
-        return new DataSourceTransactionManager(dataSource);
+        DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(dataSource);
+        transactionManager.setDefaultTimeout(30); // 트랜잭션 타임아웃 설정
+        transactionManager.setRollbackOnCommitFailure(true);
+        return transactionManager;
     }
 
     @Bean
